@@ -426,7 +426,7 @@
         window.addEventListener('load', async () => {
             if (firebaseConfigStr) {
                 try {
-                    const firebaseConfig = JSON.parse(firebaseConfigStr);
+                    const firebaseConfig = firebaseConfigStr;
                     const app = initializeApp(firebaseConfig);
                     auth = getAuth(app);
                     db = getFirestore(app);
