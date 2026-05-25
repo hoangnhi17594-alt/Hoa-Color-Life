@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Tra Cứu Sở Hữu Hoa & Đồng Bộ Trực Tuyến</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PapaParse CDN for parsing CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f4f7f6 0%, #eef2f5 100%);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased pb-12">
+
+    <!-- Header Section -->
+    <header class="bg-gradient-to-r from-teal-700 to-emerald-850 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-white/10 rounded-xl backdrop-blur-md">
+                    <i class="fa-solid fa-cloud-arrow-up text-2xl text-emerald-200"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
+                        <span>Tra Cứu Sở Hữu Hoa</span>
+                        <span id="cloudStatusBadge" class="text-xs font-normal py-0.5 px-2 rounded-full bg-slate-500/30 text-slate-300">Đang khởi tạo kết nối...</span>
+                    </h1>
+                    <p class="text-xs text-emerald-100 font-light">Dữ liệu được đồng bộ đám mây trực tuyến thời gian thực</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center flex-wrap gap-2">
+                <!-- Export Button -->
+                <button onclick="exportToCSV()" class="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white text-sm font-semibold py-2 px-4 rounded-xl shadow-md transition duration-200 ease-in-out" title="Tải dữ liệu hiện tại về máy dạng file CSV">
+                    <i class="fa-solid fa-file-arrow-down"></i>
+                    <span>Xuất file CSV</span>
+                </button>
+                <!-- Upload Button -->
+                <label for="csvFileInput" class="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold py-2 px-4 rounded-xl cursor-pointer shadow-md shadow-emerald-700/20 transition duration-200 ease-in-out">
+                    <i class="fa-solid fa-file-csv text-base"></i>
+                    <span>Nạp đè dữ liệu CSV</span>
+                </label>
+                <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleFileSelect(event)">
+                <!-- Clear Button -->
+                <button onclick="clearDatabase()" class="p-2 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-300 rounded-xl transition duration-150" title="Khởi tạo lại dữ liệu mẫu">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+        
+        <!-- Welcome / Upload Prompt Zone (Fallback if completely empty) -->
+        <div id="uploadPromptZone" class="hidden bg-white rounded-2xl shadow-xl p-8 text-center max-w-2xl mx-auto border border-slate-100 transition duration-300">
+            <div class="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="fa-solid fa-cloud-arrow-up text-3xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-slate-800 mb-2">Chưa có dữ liệu trực tuyến</h3>
+            <p class="text-slate-500 text-sm mb-6 leading-relaxed">
+                Tải lên file <strong class="text-emerald-600">.csv</strong> của bạn để bắt đầu khởi tạo cơ sở dữ liệu trên đám mây. Mọi người được chia sẻ liên kết sẽ xem được dữ liệu này ngay lập tức.
+            </p>
+            <div class="border-2 border-dashed border-slate-200 hover:border-emerald-400 bg-slate-50 hover:bg-emerald-50/10 rounded-xl p-8 cursor-pointer transition duration-200" onclick="document.getElementById('csvFileInput').click()">
+                <i class="fa-solid fa-file-excel text-4xl text-slate-300 mb-3 block"></i>
+                <span class="text-sm font-medium text-slate-600 block">Chọn file CSV của bạn để tải lên đồng bộ</span>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Content -->
+        <div id="dashboardContent" class="space-y-8">
+            
+            <!-- Statistics Row -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Stat Card 1 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center gap-5 transition hover:shadow-md">
+                    <div class="p-4 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <i class="fa-solid fa-spa text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Tổng số loài hoa</span>
+                        <span id="statTotalFlowers" class="text-2xl sm:text-3xl font-bold text-slate-800">0</span>
+                    </div>
+                </div>
+                <!-- Stat Card 2 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center gap-5 transition hover:shadow-md">
+                    <div class="p-4 bg-sky-50 text-sky-600 rounded-xl">
+                        <i class="fa-solid fa-users text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Tổng số thành viên</span>
+                        <span id="statTotalMembers" class="text-2xl sm:text-3xl font-bold text-slate-800">0</span>
+                    </div>
+                </div>
+                <!-- Stat Card 3 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex items-center gap-5 transition hover:shadow-md">
+                    <div class="p-4 bg-purple-50 text-purple-600 rounded-xl">
+                        <i class="fa-solid fa-clipboard-list text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Tổng số lượt sở hữu</span>
+                        <span id="statTotalRecords" class="text-2xl sm:text-3xl font-bold text-slate-800">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two Columns Layout: Search Area & Add New Entry Form -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <!-- Left: Search Area (Span 2) -->
+                <div class="lg:col-span-2 bg-white rounded-2xl shadow-md border border-slate-100 p-6 md:p-8 flex flex-col justify-between">
+                    <div>
+                        <div class="text-center lg:text-left mb-6">
+                            <h2 class="text-2xl font-bold text-slate-800">Tra cứu nhanh bằng tên hoa</h2>
+                            <p class="text-sm text-slate-500 mt-1">Gõ tên loài hoa (có hoặc không có dấu đều được), kết quả sẽ hiển thị ngay lập tức kèm hình ảnh minh họa</p>
+                        </div>
+
+                        <!-- Custom Search Bar -->
+                        <div class="relative max-w-2xl mx-auto lg:mx-0">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <i class="fa-solid fa-magnifying-glass text-slate-400 text-lg"></i>
+                            </div>
+                            <input type="text" id="flowerSearchInput" oninput="handleSearchInput()" placeholder="Ví dụ: Anh Thảo Hồng, Bách Hợp, Baby..." class="block w-full pl-12 pr-12 py-4 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white text-slate-800 placeholder-slate-400 text-base md:text-lg focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 shadow-inner transition duration-200">
+                            <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600">
+                                <i class="fa-solid fa-circle-xmark text-lg"></i>
+                            </button>
+                            
+                            <!-- Search Autocomplete Suggestions Dropdown -->
+                            <div id="autocompleteDropdown" class="hidden absolute left-0 right-0 mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-30 max-h-60 overflow-y-auto custom-scrollbar divide-y divide-slate-50">
+                                <!-- Items injected dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick tags for quick search -->
+                    <div class="mt-6 border-t border-slate-100 pt-4">
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <span class="text-xs text-slate-400 font-medium"><i class="fa-solid fa-tags mr-1"></i>Gợi ý nhanh:</span>
+                            <div id="quickTags" class="flex flex-wrap gap-1.5">
+                                <!-- Quick tags injected here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Add New Entry Form (Span 1) -->
+                <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-6">
+                    <div class="mb-4">
+                        <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-plus text-emerald-500"></i>
+                            <span>Thêm Dữ Liệu Mới</span>
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-0.5">Thêm nhanh loài hoa hoặc thành viên và đồng bộ trực tiếp lên mây</p>
+                    </div>
+
+                    <form id="addEntryForm" onsubmit="addNewEntry(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Tên loài hoa <span class="text-rose-500">*</span></label>
+                            <input type="text" id="newFlowerName" required placeholder="Ví dụ: Cẩm Chướng Đỏ" class="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Thành viên sở hữu <span class="text-rose-500">*</span></label>
+                            <input type="text" id="newOwnerName" required placeholder="Ví dụ: Hoa Hoa - Nguyễn An" class="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Hình ảnh hoa (Tùy chọn)</label>
+                            <input type="file" id="newFlowerImageFile" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer">
+                        </div>
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-md shadow-emerald-700/10 transition duration-150 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                            <span>Lưu và đồng bộ</span>
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+
+            <!-- Results Section with Flower Image Card (360x480) & Side Owner List -->
+            <div id="resultsSection" class="hidden transition duration-300">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden p-6 md:p-8 flex flex-col md:flex-row gap-8">
+                    
+                    <!-- Left Column: Flower Image Card (Strictly 360x480 width/height) -->
+                    <div class="w-full max-w-[360px] h-[480px] mx-auto md:mx-0 relative overflow-hidden bg-slate-900 rounded-2xl group shrink-0 shadow-lg border border-slate-100">
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent z-10 pointer-events-none"></div>
+                        
+                        <!-- Flower Cover Photo -->
+                        <img id="resultFlowerCoverImage" src="https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=1000&auto=format&fit=crop&q=80" alt="Cover Flower" class="w-full h-full object-cover transition duration-500 group-hover:scale-105">
+                        
+                        <!-- Floating camera button inside the card -->
+                        <div class="absolute top-4 right-4 z-20">
+                            <button onclick="triggerChangePhoto()" class="flex items-center justify-center w-10 h-10 bg-black/60 hover:bg-black/80 text-white rounded-xl backdrop-blur-md shadow-lg transition duration-150" title="Thay đổi ảnh hoa này">
+                                <i class="fa-solid fa-camera text-sm"></i>
+                            </button>
+                            <input type="file" id="changePhotoFileInput" accept="image/*" class="hidden" onchange="handlePhotoChange(event)">
+                        </div>
+
+                        <!-- Info details written over the bottom of the card -->
+                        <div class="absolute bottom-6 left-6 right-6 z-20 text-white pointer-events-none">
+                            <span class="bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider py-1 px-2.5 rounded-full shadow-md">Thông tin hoa</span>
+                            <h3 class="text-2xl font-extrabold mt-2 tracking-tight line-clamp-2" id="searchedFlowerTitle">Anh Thảo Hồng</h3>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Owners list and counter header -->
+                    <div class="flex-1 flex flex-col justify-between">
+                        <div>
+                            <!-- Search Result Header within section -->
+                            <div class="border-b border-slate-100 pb-4 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div>
+                                    <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-square-poll-horizontal text-emerald-600"></i>
+                                        <span>Thành viên đang sở hữu hoa này</span>
+                                    </h3>
+                                    <p class="text-xs text-slate-400 mt-1">Danh sách thành viên nhận bông hoa này</p>
+                                </div>
+                                <span id="ownerCountBadge" class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">0 Thành viên sở hữu</span>
+                            </div>
+
+                            <!-- Owners Grid -->
+                            <div class="overflow-y-auto max-h-[360px] custom-scrollbar pr-2">
+                                <div id="ownersListGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <!-- Owner cards injected dynamically -->
+                                </div>
+                                
+                                <!-- Empty Results Inside -->
+                                <div id="noOwnersFound" class="hidden text-center py-12">
+                                    <i class="fa-regular fa-face-frown text-4xl text-slate-300 mb-3 block"></i>
+                                    <p class="text-slate-500">Không tìm thấy thành viên nào sở hữu hoa này.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Decorative footer inside result block -->
+                        <div class="mt-6 border-t border-slate-100 pt-4 flex justify-between items-center text-xs text-slate-400">
+                            <span><i class="fa-regular fa-lightbulb mr-1.5"></i>Mẹo: Bạn có thể rê chuột vào thành viên để sao chép nhanh tên của họ</span>
+                            <span class="hidden md:inline font-semibold text-slate-300">360x480 Card View</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Full List Explorer Tab -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-lg">Khám phá tất cả dữ liệu</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Danh sách tổng hợp các loài hoa kèm hình ảnh trực quan</p>
+                    </div>
+                    <!-- Small table filter -->
+                    <div class="relative w-full sm:w-72">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-filter text-slate-400 text-xs"></i>
+                        </div>
+                        <input type="text" id="tableFilterInput" oninput="filterTable()" placeholder="Lọc bảng nhanh..." class="w-full pl-9 pr-4 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-400 uppercase text-xxs tracking-wider border-b border-slate-100 font-bold">
+                                <th class="py-3.5 px-6">Hình Ảnh</th>
+                                <th class="py-3.5 px-6">Tên Hoa</th>
+                                <th class="py-3.5 px-6">Thành Viên Đang Sở Hữu</th>
+                                <th class="py-3.5 px-6 text-right">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody" class="divide-y divide-slate-100 text-sm text-slate-600">
+                            <!-- Injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination/Status footer for table -->
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+                    <div>Hiển thị <span id="tableShowingCount" class="font-bold">0</span> trên <span id="tableTotalCount" class="font-bold">0</span> dòng dữ liệu</div>
+                    <div class="flex gap-2">
+                        <button id="prevPageBtn" onclick="changePage(-1)" class="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded text-slate-600 disabled:opacity-50 transition">Trước</button>
+                        <button id="nextPageBtn" onclick="changePage(1)" class="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded text-slate-600 disabled:opacity-50 transition font-medium">Sau</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Custom alert/notification toast -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-10 opacity-0 bg-slate-800 text-white text-sm px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 transition-all duration-300">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toastMessage">Thông báo ở đây!</span>
+    </div>
+
+    <!-- Firebase Integration Logic (ES Modules) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, deleteDoc, getDocs, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Toàn bộ dữ liệu gốc từ tệp CSV của bạn được nhúng sẵn làm dữ liệu mặc định (đảm bảo mở offline vẫn hiện)
+        const demoData = [
+            {"TÊN HOA": "Anh Thảo Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Misu - Đỗ Xuân"},
+            {"TÊN HOA": "Anh Thảo Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Ngoan xinh yêu✌️- Lê Tiến"},
+            {"TÊN HOA": "Anh Thảo Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Tiểu Li Hoa - Hoàng Nhi"},
+            {"TÊN HOA": "Anh Thảo Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "玉玄 - Huyền bé bự"},
+            {"TÊN HOA": "Anh Thảo Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Lonamama - Loan Lee"},
+            {"TÊN HOA": "Anh Thảo Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Dứa - Bé Hà"},
+            {"TÊN HOA": "Anh Thảo Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Trang Trang - Thanh Trang"},
+            {"TÊN HOA": "Anh Thảo Vàng", "THÀNH VIÊN ĐANG SỞ HỮU": "Tiểu Xù - Trucmai Huynh"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Bíccabo - Thanh Ngân Trần"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Misu - Đỗ Xuân"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Ngoan xinh yêu✌️- Lê Tiến"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Tiểu Bảo Bối - Linh"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Tiểu Xù - Trucmai Huynh"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "TràMy - Trúc Phượng"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "玉玄 - Huyền bé bự"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Xoài xoàii - Yuri Trang"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Dứa - Bé Hà"},
+            {"TÊN HOA": "Anh Thảo Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Trang Trang - Thanh Trang"},
+            {"TÊN HOA": "Bà Bà Na Hồng Nhạt", "THÀNH VIÊN ĐANG SỞ HỮU": "Tao Tao - Phương Minie"},
+            {"TÊN HOA": "Bà Bà Na Hồng Nhạt", "THÀNH VIÊN ĐANG SỞ HỮU": "TràMy - Trúc Phượng"},
+            {"TÊN HOA": "Bà Bà Na Hồng Nhạt", "THÀNH VIÊN ĐANG SỞ HỮU": "Xoài xoàii - Yuri Trang"},
+            {"TÊN HOA": "Bà Bà Na Sao Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Gin - Hoàng Giang"},
+            {"TÊN HOA": "Bà Bà Na Sao Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Na Na - Na Na"},
+            {"TÊN HOA": "Bà Bà Na Sao Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "TràMy - Trúc Phượng"},
+            {"TÊN HOA": "Bà Bà Na Sao Xanh", "THÀNH VIÊN ĐANG SỞ HỮU": "Ngoan xinh yêu✌️- Lê Tiến"},
+            {"TÊN HOA": "Bà Bà Na Trắng Sương", "THÀNH VIÊN ĐANG SỞ HỮU": "TràMy - Trúc Phượng"},
+            {"TÊN HOA": "Bà Bà Na Trắng Sương", "THÀNH VIÊN ĐANG SỞ HỮU": "Xoài xoàii - Yuri Trang"},
+            {"TÊN HOA": "Bà Bà Na Trắng Sương", "THÀNH VIÊN ĐANG SỞ HỮU": "Ngoan xinh yêu✌️- Lê Tiến"},
+            {"TÊN HOA": "Bà Bà Na Trắng Sương", "THÀNH VIÊN ĐANG SỞ HỮU": "Tiêu giao- Lê Thị Thu Uyên"},
+            {"TÊN HOA": "Baby Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Thỏ Béo - Tường Vy"},
+            {"TÊN HOA": "Baby Lam", "THÀNH VIÊN ĐANG SỞ HỮU": "Lộ Vi Vi - clone Vy Vy"},
+            {"TÊN HOA": "Baby Lam", "THÀNH VIÊN ĐANG SỞ HỮU": "Mây - Mây Mây"},
+            {"TÊN HOA": "Baby Lam", "THÀNH VIÊN ĐANG SỞ HỮU": "Gin - Hoàng Giang"},
+            {"TÊN HOA": "Baby Lam", "THÀNH VIÊN ĐANG SỞ HỮU": "Thỏ Béo - Tường Vy"},
+            {"TÊN HOA": "Baby Trắng", "THÀNH VIÊN ĐANG SỞ HỮU": "Thỏ Béo - Tường Vy"},
+            {"TÊN HOA": "Baby Trắng", "THÀNH VIÊN ĐANG SỞ HỮU": "dtuene - Tue Duong"},
+            {"TÊN HOA": "Bách Hợp Lồng Đèn", "THÀNH VIÊN ĐANG SỞ HỮU": "Tao Tao - Phương Minie"},
+            {"TÊN HOA": "Bách Hợp Lồng Đèn", "THÀNH VIÊN ĐANG SỞ HỮU": "Chuối Xoài Cam - Giangthanh"},
+            {"TÊN HOA": "Bách Hợp Lồng Đèn", "THÀNH VIÊN ĐANG SỞ HỮU": "Dứa - Bé Hà"},
+            {"TÊN HOA": "Bách Hợp Lồng Đèn", "THÀNH VIÊN ĐANG SỞ HỮU": "Huỳnh Trâm - Huỳnh Trâm"},
+            {"TÊN HOA": "Bách Hợp Lồng Đèn", "THÀNH VIÊN ĐANG SỞ HỮU": "Tiêu giao- Lê Thị Thu Uyên"},
+            {"TÊN HOA": "Bách Hợp Lồng Đèn", "THÀNH VIÊN ĐANG SỞ HỮU": "Tiểu Li Hoa - Hoàng Nhi"},
+            {"TÊN HOA": "Bụp Hồng Cận Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Ngoan xinh yêu✌️- Lê Tiến"},
+            {"TÊN HOA": "Bụp Hồng Cận Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "dtuene - Tue Duong"},
+            {"TÊN HOA": "Bụp Hồng Cận Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Lonamama - Loan Lee"},
+            {"TÊN HOA": "Bụp Hồng Cận Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Huỳnh Trâm - Huỳnh Trâm"},
+            {"TÊN HOA": "Bụp Hồng Cận Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Anh Cá - Quân"},
+            {"TÊN HOA": "Bụp Hồng Cận Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Bíccabo - Thanh Ngân Trần"},
+            {"TÊN HOA": "Bụp Hồng Cận Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Gin - Hoàng Giang"},
+            {"TÊN HOA": "Bụp Hồng Cận Hồng", "THÀNH VIÊN ĐANG SỞ HỮU": "Maow - Trâm"}
+        ];
+
+        // Ảnh hoa mặc định cực đẹp phục vụ chế độ Offline
+        const defaultFlowerImages = {
+            "Anh Thảo Hồng": "https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?w=600&auto=format&fit=crop&q=80", 
+            "Anh Thảo Vàng": "https://images.unsplash.com/photo-1550950158-d0d960dff51b?w=600&auto=format&fit=crop&q=80",
+            "Anh Thảo Xanh": "https://images.unsplash.com/photo-1516283515582-7634db84772b?w=600&auto=format&fit=crop&q=80",
+            "Bà Bà Na Hồng Nhạt": "https://images.unsplash.com/photo-1508784932211-5a5229b0113c?w=600&auto=format&fit=crop&q=80",
+            "Bà Bà Na Sao Xanh": "https://images.unsplash.com/photo-1525253086316-d0c936c814f8?w=600&auto=format&fit=crop&q=80",
+            "Bà Bà Na Trắng Sương": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop&q=80",
+            "Baby Hồng": "https://images.unsplash.com/photo-1550950158-d0d960dff51b?w=600&auto=format&fit=crop&q=80",
+            "Baby Lam": "https://images.unsplash.com/photo-150752428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80",
+            "Baby Trắng": "https://images.unsplash.com/photo-1596436889106-be35e843f974?w=600&auto=format&fit=crop&q=80",
+            "Bách Hợp Lồng Đèn": "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=600&auto=format&fit=crop&q=80",
+            "Bụp Hồng Cận Hồng": "https://images.unsplash.com/photo-1589244159943-460088ed5c92?w=600&auto=format&fit=crop&q=80"
+        };
+
+        const genericFlowerFallback = "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=600&auto=format&fit=crop&q=80";
+
+        // Global States
+        let database = [];
+        let uniqueFlowers = [];
+        let uniqueMembers = [];
+        let flowerToOwnersMap = {};
+        let customFlowerImagesMap = {};
+        let selectedFlowerNameGlobal = "";
+        let isOnline = false;
+
+        // Firebase Services Reference
+        let db, auth, appId;
+        let currentUser = null; // Trình theo dõi xác thực
+        let unsubscribeRecords = null;
+        let unsubscribeImages = null;
+
+        // Pagination/Table States
+        let filteredTableData = [];
+        let currentPage = 1;
+        const rowsPerPage = 10;
+
+        // Đọc cấu hình môi trường an toàn
+        const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+        const rawAppId = typeof __app_id !== 'undefined' ? __app_id : null;
+        appId = rawAppId ? rawAppId : 'tra-cuu-hoa-global';
+
+        // Khởi động khi tải xong trang web
+        window.addEventListener('load', async () => {
+            if (firebaseConfigStr) {
+                try {
+                    const firebaseConfig = JSON.parse(firebaseConfigStr);
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    // Thiết lập bộ lắng nghe trạng thái đăng nhập TRƯỚC (Rule 3)
+                    onAuthStateChanged(auth, (user) => {
+                        currentUser = user;
+                        if (user) {
+                            isOnline = true;
+                            document.getElementById('cloudStatusBadge').className = "text-xs font-normal py-0.5 px-2.5 rounded-full bg-emerald-500 text-white flex items-center gap-1.5 shadow-sm shadow-emerald-500/20 animate-pulse";
+                            document.getElementById('cloudStatusBadge').innerHTML = `<span class="w-1.5 h-1.5 bg-white rounded-full"></span> Trực tuyến`;
+                            showToast("Đã kết nối dữ liệu đám mây trực tuyến!", "fa-cloud", "emerald");
+                            
+                            // Khởi động kết nối các bộ lắng nghe thời gian thực của Firestore
+                            setupRealtimeListeners(user);
+                        } else {
+                            document.getElementById('cloudStatusBadge').className = "text-xs font-normal py-0.5 px-2.5 rounded-full bg-slate-500/30 text-slate-300";
+                            document.getElementById('cloudStatusBadge').innerHTML = "Đang kết nối...";
+                        }
+                    });
+
+                    // Thực hiện xác thực đăng nhập (bắt đầu lưu trình tự động)
+                    await performAuthentication();
+
+                } catch (e) {
+                    console.error("Firebase Initialization Error:", e);
+                    handleOfflineFallback();
+                }
+            } else {
+                handleOfflineFallback();
+            }
+        });
+
+        // Hàm xử lý xác thực bảo mật và dự phòng lỗi (Rule 3)
+        async function performAuthentication() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.warn("Primary authentication failed, trying anonymous auth fallback...", err);
+                try {
+                    // Nếu lỗi Token thì tự động chuyển sang kết nối ẩn danh dự phòng
+                    await signInAnonymously(auth);
+                } catch (fallbackErr) {
+                    console.error("All authentication methods failed:", fallbackErr);
+                    handleOfflineFallback();
+                }
+            }
+        }
+
+        // Chế độ ngoại tuyến Offline / Trình duyệt cục bộ
+        function handleOfflineFallback() {
+            isOnline = false;
+            currentUser = null;
+            document.getElementById('cloudStatusBadge').className = "text-xs font-normal py-0.5 px-2.5 rounded-full bg-amber-500 text-white flex items-center gap-1.5 shadow-sm";
+            document.getElementById('cloudStatusBadge').innerHTML = `<span class="w-1.5 h-1.5 bg-white rounded-full"></span> Chế độ Offline`;
+            showToast("Đang mở bằng file offline. Dữ liệu sẽ lưu trên trình duyệt của máy bạn.", "fa-circle-info", "sky");
+
+            // Load from LocalStorage
+            const savedImages = localStorage.getItem('tra_cuu_hoa_images');
+            if (savedImages) {
+                try { customFlowerImagesMap = JSON.parse(savedImages); } catch(e) { customFlowerImagesMap = {}; }
+            }
+            const savedData = localStorage.getItem('tra_cuu_hoa_db');
+            if (savedData) {
+                try { database = JSON.parse(savedData); } catch(e) { database = demoData; }
+            } else {
+                database = demoData;
+            }
+            processDatabase();
+        }
+
+        // Đồng bộ hóa kết nối thời gian thực (Rule 1 & Rule 2 & Rule 3)
+        function setupRealtimeListeners(user) {
+            if (!isOnline || !user) return; // Bảo vệ rào chắn phân quyền truy cập
+
+            // Hủy các bộ lắng nghe cũ nếu tồn tại
+            if (unsubscribeRecords) unsubscribeRecords();
+            if (unsubscribeImages) unsubscribeImages();
+
+            // 1. Đồng bộ danh sách hoa (records)
+            const recordsCollection = collection(db, 'artifacts', appId, 'public', 'data', 'flower_records');
+            unsubscribeRecords = onSnapshot(recordsCollection, (snapshot) => {
+                const loadedData = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    loadedData.push({
+                        id: doc.id,
+                        "TÊN HOA": data.flowerName,
+                        "THÀNH VIÊN ĐANG SỞ HỮU": data.ownerName
+                    });
+                });
+
+                // Nếu database đám mây trống, tải dữ liệu mẫu ban đầu lên mây
+                if (loadedData.length === 0) {
+                    seedCloudWithDemoData(user);
+                } else {
+                    database = loadedData;
+                    processDatabase();
+                    if (selectedFlowerNameGlobal) {
+                        selectFlower(selectedFlowerNameGlobal);
+                    }
+                }
+            }, (error) => {
+                console.error("Error reading database:", error);
+                // Gặp lỗi bảo mật, tự động đưa trang về chế độ ngoại tuyến hoạt động trơn tru
+                handleOfflineFallback();
+            });
+
+            // 2. Đồng bộ danh sách ảnh tùy chỉnh (images)
+            const imagesCollection = collection(db, 'artifacts', appId, 'public', 'data', 'flower_images');
+            unsubscribeImages = onSnapshot(imagesCollection, (snapshot) => {
+                snapshot.forEach(doc => {
+                    customFlowerImagesMap[doc.id] = doc.data().imageData;
+                });
+                processDatabase();
+                if (selectedFlowerNameGlobal) {
+                    selectFlower(selectedFlowerNameGlobal);
+                }
+            }, (error) => {
+                console.error("Error reading images:", error);
+            });
+        }
+
+        // Tải danh sách mặc định lên đám mây lần đầu khởi tạo
+        async function seedCloudWithDemoData(user) {
+            if (!isOnline || !user) return;
+            showToast("Đang đồng bộ cơ sở dữ liệu gốc lên đám mây...", "fa-cloud-arrow-up", "sky");
+            try {
+                const batch = writeBatch(db);
+                demoData.forEach(item => {
+                    const docRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'flower_records'));
+                    batch.set(docRef, {
+                        flowerName: item["TÊN HOA"],
+                        ownerName: item["THÀNH VIÊN ĐANG SỞ HỮU"],
+                        createdAt: Date.now()
+                    });
+                });
+                await batch.commit();
+            } catch (e) {
+                console.error("Error seeding cloud data:", e);
+            }
+        }
+
+        // UI Toast helper
+        window.showToast = function(message, iconClass = "fa-circle-check", theme = "emerald") {
+            const toast = document.getElementById('toast');
+            const toastIcon = document.getElementById('toastIcon');
+            const toastMessage = document.getElementById('toastMessage');
+
+            toast.className = "fixed bottom-5 right-5 z-50 transform rounded-xl shadow-xl flex items-center gap-3 transition-all duration-300 px-4 py-3 text-white ";
+            if (theme === "emerald") toast.classList.add("bg-emerald-800");
+            else if (theme === "sky") toast.classList.add("bg-sky-800");
+            else if (theme === "rose") toast.classList.add("bg-rose-800");
+
+            toastIcon.className = `fa-solid ${iconClass} `;
+            if (theme === "emerald") toastIcon.classList.add("text-emerald-400");
+            else if (theme === "sky") toastIcon.classList.add("text-sky-300");
+            else if (theme === "rose") toastIcon.classList.add("text-rose-400");
+
+            toastMessage.textContent = message;
+            toast.classList.remove('translate-y-10', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+            }, 4000);
+        }
+
+        // Helper lấy liên kết ảnh hoa
+        window.getFlowerImageUrl = function(flowerName) {
+            if (customFlowerImagesMap[flowerName]) {
+                return customFlowerImagesMap[flowerName];
+            }
+            if (defaultFlowerImages[flowerName]) {
+                return defaultFlowerImages[flowerName];
+            }
+            return genericFlowerFallback;
+        }
+
+        // Đọc file CSV và đồng bộ lên đám mây
+        window.handleFileSelect = async function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: async function(results) {
+                    if (results.data && results.data.length > 0) {
+                        const keys = Object.keys(results.data[0]);
+                        const flowerKey = keys.find(k => k.trim().toUpperCase() === 'TÊN HOA' || k.trim().toLowerCase().includes('hoa'));
+                        const memberKey = keys.find(k => k.trim().toUpperCase() === 'THÀNH VIÊN ĐANG SỞ HỮU' || k.trim().toLowerCase().includes('thành viên') || k.trim().toLowerCase().includes('so huu'));
+
+                        if (!flowerKey || !memberKey) {
+                            showToast("File không đúng cấu trúc (Cần có cột 'TÊN HOA' và 'THÀNH VIÊN ĐANG SỞ HỮU')", "fa-circle-exclamation", "rose");
+                            return;
+                        }
+
+                        const normalizedData = results.data.map(row => ({
+                            "TÊN HOA": row[flowerKey]?.trim() || "",
+                            "THÀNH VIÊN ĐANG SỞ HỮU": row[memberKey]?.trim() || ""
+                        })).filter(row => row["TÊN HOA"] && row["THÀNH VIÊN ĐANG SỞ HỮU"]);
+
+                        if (normalizedData.length === 0) {
+                            showToast("File rỗng hoặc không có dữ liệu hợp lệ", "fa-circle-exclamation", "rose");
+                            return;
+                        }
+
+                        if (isOnline && currentUser) {
+                            showToast("Đang đồng bộ dữ liệu CSV lên đám mây trực tuyến...", "fa-arrows-rotate", "sky");
+                            try {
+                                const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'flower_records'));
+                                const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                                await Promise.all(deletePromises);
+
+                                const batch = writeBatch(db);
+                                normalizedData.forEach(item => {
+                                    const docRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'flower_records'));
+                                    batch.set(docRef, {
+                                        flowerName: item["TÊN HOA"],
+                                        ownerName: item["THÀNH VIÊN ĐANG SỞ HỮU"],
+                                        createdAt: Date.now()
+                                    });
+                                });
+                                await batch.commit();
+                                showToast(`Đồng bộ thành công ${normalizedData.length} dòng lên đám mây!`, "fa-cloud-arrow-up", "emerald");
+                            } catch (error) {
+                                console.error("CSV Upload failed:", error);
+                                showToast("Đồng bộ thất bại: " + error.message, "fa-circle-exclamation", "rose");
+                            }
+                        } else {
+                            database = normalizedData;
+                            localStorage.setItem('tra_cuu_hoa_db', JSON.stringify(database));
+                            processDatabase();
+                            showToast(`Đã lưu ${database.length} dòng vào bộ nhớ máy này`, "fa-circle-check", "emerald");
+                        }
+                    } else {
+                        showToast("Có lỗi xảy ra khi đọc file CSV này.", "fa-circle-exclamation", "rose");
+                    }
+                },
+                error: function(err) {
+                    showToast("Lỗi phân tích file: " + err.message, "fa-circle-exclamation", "rose");
+                }
+            });
+        }
+
+        // Làm mới dữ liệu
+        window.clearDatabase = async function() {
+            if (confirm("Hành động này sẽ xóa dữ liệu cũ và thiết lập lại dữ liệu mẫu gốc. Bạn có chắc chắn muốn thực hiện?")) {
+                if (isOnline && currentUser) {
+                    showToast("Đang làm mới đám mây...", "fa-arrows-rotate", "sky");
+                    try {
+                        const snapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'flower_records'));
+                        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deletePromises);
+
+                        const imagesSnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'flower_images'));
+                        const deleteImgPromises = imagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+                        await Promise.all(deleteImgPromises);
+
+                        customFlowerImagesMap = {};
+                        await seedCloudWithDemoData(currentUser);
+                        clearSearch();
+                        showToast("Đã khôi phục dữ liệu mẫu gốc trực tuyến!", "fa-rotate-left", "emerald");
+                    } catch (e) {
+                        showToast("Lỗi khi làm mới: " + e.message, "fa-circle-exclamation", "rose");
+                    }
+                } else {
+                    localStorage.removeItem('tra_cuu_hoa_db');
+                    localStorage.removeItem('tra_cuu_hoa_images');
+                    database = demoData;
+                    customFlowerImagesMap = {};
+                    processDatabase();
+                    clearSearch();
+                    showToast("Đã khôi phục dữ liệu mẫu gốc offline thành công", "fa-rotate-left", "emerald");
+                }
+            }
+        }
+
+        // Xử lý thống kê và dữ liệu trong bộ nhớ
+        function processDatabase() {
+            uniqueFlowers = [];
+            uniqueMembers = [];
+            flowerToOwnersMap = {};
+
+            const flowerSet = new Set();
+            const memberSet = new Set();
+
+            database.forEach(item => {
+                const flower = item["TÊN HOA"];
+                const owner = item["THÀNH VIÊN ĐANG SỞ HỮU"];
+
+                if (flower) flowerSet.add(flower);
+                if (owner) memberSet.add(owner);
+
+                if (!flowerToOwnersMap[flower]) {
+                    flowerToOwnersMap[flower] = [];
+                }
+                if (owner && !flowerToOwnersMap[flower].includes(owner)) {
+                    flowerToOwnersMap[flower].push(owner);
+                }
+            });
+
+            uniqueFlowers = Array.from(flowerSet).sort((a, b) => a.localeCompare(b, 'vi'));
+            uniqueMembers = Array.from(memberSet).sort((a, b) => a.localeCompare(b, 'vi'));
+
+            // Cập nhật thống kê
+            document.getElementById('statTotalFlowers').textContent = uniqueFlowers.length.toLocaleString();
+            document.getElementById('statTotalMembers').textContent = uniqueMembers.length.toLocaleString();
+            document.getElementById('statTotalRecords').textContent = database.length.toLocaleString();
+
+            // Cập nhật bảng
+            filteredTableData = [...database];
+            renderTable();
+
+            // Render gợi ý tag nhanh
+            const quickTagsContainer = document.getElementById('quickTags');
+            quickTagsContainer.innerHTML = '';
+            const sampleFlowers = uniqueFlowers.slice(0, 7);
+            sampleFlowers.forEach(fl => {
+                const tag = document.createElement('button');
+                tag.className = "bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 text-xs py-1 px-2.5 rounded-lg border border-slate-200 hover:border-emerald-200 transition duration-150 font-medium flex items-center gap-1.5 shadow-sm";
+                tag.innerHTML = `
+                    <img src="${getFlowerImageUrl(fl)}" alt="tag" class="w-3.5 h-3.5 rounded-full object-cover">
+                    <span>${fl}</span>
+                `;
+                tag.onclick = () => {
+                    document.getElementById('flowerSearchInput').value = fl;
+                    selectFlower(fl);
+                };
+                quickTagsContainer.appendChild(tag);
+            });
+
+            // Tự động ẩn/hiển thị khung kéo thả
+            if (database.length > 0) {
+                document.getElementById('uploadPromptZone').classList.add('hidden');
+                document.getElementById('dashboardContent').classList.remove('hidden');
+            } else {
+                document.getElementById('uploadPromptZone').classList.remove('hidden');
+                document.getElementById('dashboardContent').classList.add('hidden');
+            }
+        }
+
+        // Thêm dữ liệu mới trực tiếp (Hỗ trợ Ảnh tùy chọn)
+        window.addNewEntry = async function(event) {
+            event.preventDefault();
+            
+            const flowerNameInput = document.getElementById('newFlowerName');
+            const ownerNameInput = document.getElementById('newOwnerName');
+            const imgFileInput = document.getElementById('newFlowerImageFile');
+
+            const flowerName = flowerNameInput.value.trim();
+            const ownerName = ownerNameInput.value.trim();
+
+            if (!flowerName || !ownerName) {
+                showToast("Vui lòng điền đầy đủ thông tin!", "fa-triangle-exclamation", "rose");
+                return;
+            }
+
+            const isDuplicate = database.some(item => 
+                item["TÊN HOA"].toLowerCase() === flowerName.toLowerCase() && 
+                item["THÀNH VIÊN ĐANG SỞ HỮU"].toLowerCase() === ownerName.toLowerCase()
+            );
+
+            if (isDuplicate) {
+                showToast(`Thành viên này đã sở hữu hoa "${flowerName}" rồi!`, "fa-triangle-exclamation", "sky");
+                return;
+            }
+
+            const finalizeAdd = async (base64Img = null) => {
+                if (isOnline && currentUser) {
+                    showToast("Đang gửi dữ liệu lên đám mây...", "fa-cloud-arrow-up", "sky");
+                    try {
+                        const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'flower_records');
+                        await setDoc(doc(colRef), {
+                            flowerName: flowerName,
+                            ownerName: ownerName,
+                            createdAt: Date.now()
+                        });
+
+                        if (base64Img) {
+                            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'flower_images', flowerName), {
+                                imageData: base64Img
+                            });
+                        }
+                        showToast(`Đồng bộ thành công thành viên: ${ownerName}`, "fa-circle-check", "emerald");
+                    } catch (e) {
+                        showToast("Gặp sự cố khi đồng bộ lên mây: " + e.message, "fa-circle-exclamation", "rose");
+                    }
+                } else {
+                    database.unshift({
+                        "TÊN HOA": flowerName,
+                        "THÀNH VIÊN ĐANG SỞ HỮU": ownerName
+                    });
+                    if (base64Img) {
+                        customFlowerImagesMap[flowerName] = base64Img;
+                        localStorage.setItem('tra_cuu_hoa_images', JSON.stringify(customFlowerImagesMap));
+                    }
+                    localStorage.setItem('tra_cuu_hoa_db', JSON.stringify(database));
+                    processDatabase();
+                    showToast(`Đã thêm thành công: ${ownerName}`, "fa-circle-check", "emerald");
+                }
+
+                // Reset inputs
+                flowerNameInput.value = '';
+                ownerNameInput.value = '';
+                imgFileInput.value = '';
+            };
+
+            // Kiểm tra tải ảnh lên
+            if (imgFileInput.files && imgFileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    finalizeAdd(e.target.result);
+                };
+                reader.readAsDataURL(imgFileInput.files[0]);
+            } else {
+                await finalizeAdd();
+            }
+        }
+
+        // Kích hoạt đổi ảnh cover hoa
+        window.triggerChangePhoto = function() {
+            document.getElementById('changePhotoFileInput').click();
+        }
+
+        window.handlePhotoChange = async function(event) {
+            const file = event.target.files[0];
+            if (!file || !selectedFlowerNameGlobal) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const base64Data = e.target.result;
+
+                if (isOnline && currentUser) {
+                    showToast("Đang cập nhật ảnh hoa lên đám mây trực tuyến...", "fa-image", "sky");
+                    try {
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'flower_images', selectedFlowerNameGlobal), {
+                            imageData: base64Data
+                        });
+                        showToast("Đã tải ảnh lên đám mây trực tuyến thành công!", "fa-cloud-arrow-up", "emerald");
+                    } catch (err) {
+                        showToast("Không thể tải ảnh: " + err.message, "fa-circle-exclamation", "rose");
+                    }
+                } else {
+                    customFlowerImagesMap[selectedFlowerNameGlobal] = base64Data;
+                    localStorage.setItem('tra_cuu_hoa_images', JSON.stringify(customFlowerImagesMap));
+                    document.getElementById('resultFlowerCoverImage').src = base64Data;
+                    processDatabase();
+                    showToast("Đã lưu ảnh cục bộ trên máy này!", "fa-image", "emerald");
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Xóa một hàng dữ liệu khỏi đám mây / local
+        window.deleteEntry = async function(flower, owner) {
+            if (confirm(`Bạn chắc chắn muốn xoá lượt sở hữu: "${owner}" sở hữu hoa "${flower}"?`)) {
+                if (isOnline && currentUser) {
+                    const match = database.find(item => item["TÊN HOA"] === flower && item["THÀNH VIÊN ĐANG SỞ HỮU"] === owner);
+                    if (match && match.id) {
+                        showToast("Đang xóa dữ liệu trực tuyến...", "fa-trash-can", "sky");
+                        try {
+                            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'flower_records', match.id));
+                            showToast("Đã xóa vĩnh viễn dòng này khỏi đám mây!", "fa-circle-check", "emerald");
+                        } catch (e) {
+                            showToast("Lỗi khi xóa: " + e.message, "fa-circle-exclamation", "rose");
+                        }
+                    } else {
+                        showToast("Không tìm thấy dòng dữ liệu đồng bộ", "fa-circle-exclamation", "rose");
+                    }
+                } else {
+                    database = database.filter(item => !(item["TÊN HOA"] === flower && item["THÀNH VIÊN ĐANG SỞ HỮU"] === owner));
+                    localStorage.setItem('tra_cuu_hoa_db', JSON.stringify(database));
+                    processDatabase();
+                    
+                    if (selectedFlowerNameGlobal === flower) {
+                        selectFlower(flower);
+                    } else {
+                        clearSearch();
+                    }
+                    showToast("Đã xóa dữ liệu thành công", "fa-circle-check", "emerald");
+                }
+            }
+        }
+
+        // Xuất ra tệp CSV để đồng bộ lưu trữ
+        window.exportToCSV = function() {
+            if (database.length === 0) {
+                showToast("Không có dữ liệu để xuất!", "fa-circle-exclamation", "rose");
+                return;
+            }
+
+            const cleanExportData = database.map(row => ({
+                "TÊN HOA": row["TÊN HOA"],
+                "THÀNH VIÊN ĐANG SỞ HỮU": row["THÀNH VIÊN ĐANG SỞ HỮU"]
+            }));
+
+            const csv = Papa.unparse(cleanExportData);
+            const csvWithBOM = "\uFEFF" + csv;
+            const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "Tra_cuu_hoa_Moi_Nhat.csv");
+            document.body.appendChild(link);
+            
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast("Đã tải dữ liệu CSV thành công!", "fa-circle-down", "emerald");
+        }
+
+        // Tìm kiếm không dấu tiếng Việt
+        function removeVietnameseTones(str) {
+            str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g,"a");
+            str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g,"e");
+            str = str.replace(/ì|í|ị|ỉ|ĩ/g,"i");
+            str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g,"o");
+            str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g,"u");
+            str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g,"y");
+            str = str.replace(/đ/g,"d");
+            str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+            str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+            str = str.replace(/Ì|Í|Ị|I|Ĩ/g, "I");
+            str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+            str = str.replace(/Ù|Ú|Ụ|Ủ|U|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+            str = str.replace(/Ỳ|Ý|Y|Ỷ|Ỹ/g, "Y");
+            str = str.replace(/Đ/g, "D");
+            return str.toLowerCase().trim();
+        }
+
+        // Tính năng tìm kiếm hoa
+        window.handleSearchInput = function() {
+            const query = document.getElementById('flowerSearchInput').value;
+            const clearBtn = document.getElementById('clearSearchBtn');
+            const dropdown = document.getElementById('autocompleteDropdown');
+
+            if (query.trim() === '') {
+                clearBtn.classList.add('hidden');
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            clearBtn.classList.remove('hidden');
+
+            const normalizedQuery = removeVietnameseTones(query);
+            const matches = uniqueFlowers.filter(fl => {
+                const normalizedFlower = removeVietnameseTones(fl);
+                return normalizedFlower.includes(normalizedQuery);
+            });
+
+            if (matches.length > 0) {
+                dropdown.innerHTML = '';
+                matches.slice(0, 10).forEach(match => {
+                    const item = document.createElement('div');
+                    item.className = "px-4 py-3 hover:bg-emerald-50 cursor-pointer flex items-center justify-between transition-colors";
+                    
+                    const regex = new RegExp(`(${query})`, 'gi');
+                    const matchText = match.replace(regex, '<strong class="text-emerald-600">$1</strong>');
+                    
+                    item.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <img src="${getFlowerImageUrl(match)}" alt="icon" class="w-7 h-7 rounded-full object-cover border border-slate-100 shadow-sm">
+                            <span class="text-sm font-medium text-slate-700">${matchText}</span>
+                        </div>
+                        <span class="text-xxs bg-slate-100 text-slate-500 py-0.5 px-1.5 rounded">${flowerToOwnersMap[match]?.length || 0} chủ sở hữu</span>
+                    `;
+                    item.onclick = () => {
+                        document.getElementById('flowerSearchInput').value = match;
+                        selectFlower(match);
+                    };
+                    dropdown.appendChild(item);
+                });
+                dropdown.classList.remove('hidden');
+            } else {
+                dropdown.innerHTML = `
+                    <div class="px-4 py-3 text-sm text-slate-400 text-center italic">
+                        Không tìm thấy loài hoa nào khớp
+                    </div>
+                `;
+                dropdown.classList.remove('hidden');
+            }
+        }
+
+        window.clearSearch = function() {
+            document.getElementById('flowerSearchInput').value = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            document.getElementById('autocompleteDropdown').classList.add('hidden');
+            document.getElementById('resultsSection').classList.add('hidden');
+            selectedFlowerNameGlobal = "";
+        }
+
+        // Chọn hoa và tải danh sách sở hữu
+        window.selectFlower = function(flowerName) {
+            document.getElementById('autocompleteDropdown').classList.add('hidden');
+            selectedFlowerNameGlobal = flowerName;
+            
+            const coverImageElement = document.getElementById('resultFlowerCoverImage');
+            coverImageElement.src = getFlowerImageUrl(flowerName);
+
+            document.getElementById('searchedFlowerTitle').textContent = flowerName;
+            document.getElementById('resultsSection').classList.remove('hidden');
+
+            const owners = flowerToOwnersMap[flowerName] || [];
+            const countBadge = document.getElementById('ownerCountBadge');
+            countBadge.textContent = `${owners.length} Thành viên sở hữu`;
+
+            const grid = document.getElementById('ownersListGrid');
+            const emptyState = document.getElementById('noOwnersFound');
+            grid.innerHTML = '';
+
+            if (owners.length > 0) {
+                emptyState.classList.add('hidden');
+                owners.forEach((owner, idx) => {
+                    const parts = owner.split('-');
+                    const displayName = parts[0].trim();
+                    const subName = parts[1] ? parts[1].trim() : '';
+                    const initials = displayName.charAt(0).toUpperCase();
+
+                    const card = document.createElement('div');
+                    card.className = "bg-white border border-slate-150 rounded-xl p-4 flex items-center gap-4 hover:shadow-md transition duration-200 relative group";
+                    
+                    const bgColors = ["bg-emerald-50 text-emerald-600", "bg-sky-50 text-sky-600", "bg-pink-50 text-pink-600", "bg-indigo-50 text-indigo-600", "bg-amber-50 text-amber-600"];
+                    const chosenColor = bgColors[idx % bgColors.length];
+
+                    card.innerHTML = `
+                        <div class="w-10 h-10 ${chosenColor} rounded-full flex items-center justify-center font-bold text-sm tracking-wide shrink-0">
+                            ${initials}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-bold text-slate-800 text-sm truncate" title="${displayName}">${displayName}</h4>
+                            ${subName ? `<p class="text-xs text-slate-400 truncate mt-0.5">${subName}</p>` : '<p class="text-xs text-slate-300 italic truncate mt-0.5">Không có bí danh</p>'}
+                        </div>
+                        <div class="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition absolute right-3">
+                            <button onclick="copyToClipboard('${owner}')" class="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded" title="Sao chép tên">
+                                <i class="fa-regular fa-copy text-xs"></i>
+                            </button>
+                            <button onclick="deleteEntry('${flowerName}', '${owner}')" class="p-1.5 hover:bg-rose-50 text-rose-400 hover:text-rose-600 rounded" title="Xóa dòng này">
+                                <i class="fa-regular fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } else {
+                emptyState.classList.remove('hidden');
+            }
+
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Sao chép tên nhanh
+        window.copyToClipboard = function(text) {
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast(`Đã sao chép: "${text}"`, "fa-copy", "sky");
+        }
+
+        // Quản lý hiển thị bảng danh sách lớn bên dưới
+        window.renderTable = function() {
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, filteredTableData.length);
+            const currentPageData = filteredTableData.slice(startIndex, endIndex);
+
+            if (currentPageData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="py-8 text-center text-slate-400 italic">
+                            Không có dữ liệu trùng khớp với bộ lọc
+                        </td>
+                    </tr>
+                `;
+            } else {
+                currentPageData.forEach(row => {
+                    const flowerName = row["TÊN HOA"];
+                    const flowerImg = getFlowerImageUrl(flowerName);
+
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50/50 transition duration-150 cursor-pointer";
+                    tr.innerHTML = `
+                        <td class="py-3 px-6" onclick="clickTableRow('${flowerName}')">
+                            <img src="${flowerImg}" alt="${flowerName}" class="w-10 h-10 rounded-xl object-cover border border-slate-100 shadow-sm">
+                        </td>
+                        <td class="py-3 px-6 font-semibold text-slate-700" onclick="clickTableRow('${flowerName}')">${flowerName}</td>
+                        <td class="py-3 px-6 text-slate-500" onclick="clickTableRow('${flowerName}')">${row["THÀNH VIÊN ĐANG SỞ HỮU"]}</td>
+                        <td class="py-3 px-6 text-right">
+                            <button onclick="deleteEntry('${flowerName}', '${row["THÀNH VIÊN ĐANG SỞ HỮU"]}')" class="p-1.5 hover:bg-rose-50 text-rose-400 hover:text-rose-600 rounded transition" title="Xóa dòng">
+                                <i class="fa-regular fa-trash-can text-xs"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            document.getElementById('tableShowingCount').textContent = `${filteredTableData.length > 0 ? startIndex + 1 : 0} - ${endIndex}`;
+            document.getElementById('tableTotalCount').textContent = filteredTableData.length;
+
+            document.getElementById('prevPageBtn').disabled = currentPage === 1;
+            document.getElementById('nextPageBtn').disabled = currentPage >= Math.ceil(filteredTableData.length / rowsPerPage);
+        }
+
+        window.clickTableRow = function(flowerName) {
+            document.getElementById('flowerSearchInput').value = flowerName;
+            selectFlower(flowerName);
+        }
+
+        window.filterTable = function() {
+            const query = removeVietnameseTones(document.getElementById('tableFilterInput').value);
+            
+            filteredTableData = database.filter(row => {
+                const flowerMatch = removeVietnameseTones(row["TÊN HOA"] || "").includes(query);
+                const ownerMatch = removeVietnameseTones(row["THÀNH VIÊN ĐANG SỞ HỮU"] || "").includes(query);
+                return flowerMatch || ownerMatch;
+            });
+
+            currentPage = 1;
+            renderTable();
+        }
+
+        window.changePage = function(direction) {
+            currentPage += direction;
+            renderTable();
+        }
+
+        // Tự động ẩn menu gợi ý tìm kiếm khi click ra ngoài
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('autocompleteDropdown');
+            const searchInput = document.getElementById('flowerSearchInput');
+            if (dropdown && !dropdown.contains(event.target) && event.target !== searchInput) {
+                dropdown.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
